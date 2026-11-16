@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>贪吃蛇</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: #13a75b;
+    /* background: radial-gradient(circle at 50% -10%, #1b2b4a 0%, #070b14 65%); */
+    /* background: linear-gradient(160deg, #1e3a5f, #0b1220); */
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .panel {
+    width: min(480px, 100%);
+    padding: 18px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(30, 41, 59, .78), rgba(15, 23, 42, .92));
+    border: 1px solid rgba(148, 163, 184, .16);
+    box-shadow:
+      0 30px 60px -22px rgba(0, 0, 0, .85),
+      inset 0 1px 0 rgba(255, 255, 255, .06);
+    backdrop-filter: blur(10px);
+  }
+
+  /* ---------- 顶部信息栏 ---------- */
+  .hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 6px 14px;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 64px;
+  }
+  .stat.right { align-items: flex-end; }
+  .stat span {
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: #7c8aa5;
+  }
+  .stat b {
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    color: #e2e8f0;
+    line-height: 1.1;
+  }
+  .stat.right b { color: #67e8f9; }
+
+  .title {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: .18em;
+    background: linear-gradient(135deg, #6ee7b7, #38bdf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    white-space: nowrap;
+  }
+
+  /* ---------- 棋盘 ---------- */
+  .canvas-wrap {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #0a1120;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14);
+    background-color: #0a1120;              /* 图片加载失败时的兜底色 */
+    background-image: url('./BingWallpaper50.jpg');   /* 图片与 HTML 同目录，或写相对路径 */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* ---------- 遮罩层 ---------- */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 28px;
+    text-align: center;
+    background: rgba(7, 11, 20, .84);
+    backdrop-filter: blur(6px);
+    transition: opacity .28s ease, visibility .28s ease;
+  }
+  .overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+  }
+  .overlay h2 {
+    margin: 0;
+    font-size: 26px;
+    letter-spacing: .04em;
+    background: linear-gradient(135deg, #a7f3d0, #67e8f9);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .overlay p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #94a3b8;
+    max-width: 280px;
+  }
+
+  /* ---------- 按钮 ---------- */
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 30px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: .06em;
+    color: #04231f;
+    background: linear-gradient(135deg, #34d399, #22d3ee);
+    box-shadow: 0 10px 26px -10px rgba(52, 211, 153, .95);
+    transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+  }
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 30px -10px rgba(52, 211, 153, 1);
+  }
+  button:active { transform: translateY(0) scale(.98); }
+
+  button.secondary {
+    color: #cbd5e1;
+    background: rgba(148, 163, 184, .12);
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .22);
+    padding: 11px 26px;
+  }
+  button.secondary:hover {
+    background: rgba(148, 163, 184, .2);
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .34);
+  }
+
+  /* 音乐控制按钮行：沿用 secondary 配色，仅调整尺寸与排布 */
+  .music-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  .music-controls button {
+    min-width: 118px;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+
+  /* ---------- 底部 ---------- */
+  .footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 6px 4px;
+  }
+  .hint {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: .06em;
+    color: #64748b;
+  }
+</style>
+</head>
+<body>
+
+<!-- 主候选改为真实存在的文件名；其余命名由下方 JS 回退链依次尝试 -->
+<audio id="bgm" src="./一笑江湖 - 闻人听書.mp3" loop preload="auto"></audio>
+
+<div class="panel">
+  <div class="hud">
+    <div class="stat"><span>得分</span><b id="score">0</b></div>
+    <div class="title">贪吃蛇</div>
+    <div class="stat right"><span>最高</span><b id="best">0</b></div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle">贪吃蛇</h2>
+      <p id="ovText">用方向键 / WASD 控制移动，吃到食物蛇会变长</p>
+      <button id="ovBtn">开始游戏</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="secondary" id="restartBtn">重新开始</button>
+    <div class="music-controls">
+      <button class="secondary" id="muteBtn" type="button" aria-pressed="false">🔊 音乐开</button>
+      <button class="secondary" id="pauseBtn" type="button" aria-pressed="false">⏸ 暂停音乐</button>
+    </div>
+    <p class="hint">方向键 / WASD 控制方向 · 撞墙或咬到自己即结束</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ======================= 基础配置 ======================= */
+  const COLS = 24;          // 横向格子数
+  const ROWS = 24;          // 纵向格子数
+  const CELL = 20;          // 每格像素（逻辑像素）
+  const W = COLS * CELL;
+  const H = ROWS * CELL;
+
+  const BASE_STEP = 200;    // 初始每步耗时（毫秒），越小越快
+  const MIN_STEP  = 70;     // 速度上限
+
+  /* ======================= 元素引用 ======================= */
+  const canvas    = document.getElementById('game');
+  const ctx       = canvas.getContext('2d');
+  const scoreEl   = document.getElementById('score');
+  const bestEl    = document.getElementById('best');
+  const overlay   = document.getElementById('overlay');
+  const ovTitle   = document.getElementById('ovTitle');
+  const ovText    = document.getElementById('ovText');
+  const ovBtn     = document.getElementById('ovBtn');
+  const restartBtn= document.getElementById('restartBtn');
+  const muteBtn   = document.getElementById('muteBtn');
+  const pauseBtn  = document.getElementById('pauseBtn');
+  const bgm = document.getElementById('bgm');
+  if (bgm) {
+    bgm.volume = 0.4;   // 0 ~ 1，按需调整（元素不存在时跳过，避免中断初始化）
+    // 说明：加载失败监听与多候选回退统一放在下方「背景音乐控制」区块，
+    // 此处仅做判空与音量设置，保持初始化不中断。
+  }
+
+  /* ======================= 画布高清适配 ======================= */
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  /* ======================= 游戏状态 ======================= */
+  let snake    = [];
+  let dir      = { x: 1, y: 0 };
+  let dirQueue = [];
+  let food     = null;
+  let score    = 0;
+  let best     = 0;
+  let running  = false;
+  let acc      = 0;      // 时间累加器
+  let lastTs   = 0;
+
+  /* ======================= 最高分存取 ======================= */
+  function loadBest() {
+    try { best = parseInt(localStorage.getItem('snake_best') || '0', 10) || 0; }
+    catch (e) { best = 0; }
+    bestEl.textContent = best;
+  }
+  function saveBest() {
+    try { localStorage.setItem('snake_best', String(best)); } catch (e) {}
+  }
+
+  /* ======================= 工具函数 ======================= */
+  function updateHud() {
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  function stepMs() {
+    // 每吃 5 个食物（50 分）加速一档
+    return Math.max(MIN_STEP, BASE_STEP - Math.floor(score / 50) * 10);
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+
+  /* ======================= 食物生成 ======================= */
+  function spawnFood() {
+    const taken = new Set(snake.map(s => s.x + ',' + s.y));
+    const free = [];
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (!taken.has(x + ',' + y)) free.push({ x, y });
+      }
+    }
+    if (!free.length) return null;           // 棋盘已满
+    return free[Math.floor(Math.random() * free.length)];
+  }
+
+  /* ======================= 背景音乐控制 ======================= */
+  /*
+   * 多候选文件名回退（file:// 场景）
+   * ------------------------------------------------------------------
+   * 页面以 file:// 直接打开时，用 fetch / XHR 探测文件是否存在会因
+   * CORS（opaque origin）受限而不可靠；但 <audio> 媒体元素加载本地
+   * 同目录文件是浏览器原生能力，加载失败会派发 error 事件。
+   * 因此这里采用「error 事件中按顺序切换候选 src」的方案：
+   *   1) HTML 先给出主候选（当前真实文件名），JS 依次为失败项切换 src；
+   *   2) 某候选加载失败 → error 事件静默吞掉并切到下一个候选；
+   *   3) 某候选可播放 → canplay 事件触发；若用户已请求播放且未主动暂停，
+   *      则补一次 play()，覆盖“点击开始时主候选仍在失败链上”的时机问题；
+   *   4) 全部候选都失败时保持静默，游戏逻辑完全不受影响。
+   * 该方案不依赖网络、不依赖 CORS，在 Chrome 的 file:// 下可靠工作。
+   */
+  const BGM_CANDIDATES = [
+    './一笑江湖 - 闻人听書.mp3',   // 主候选：当前真实文件（曲名 - 歌手，含空格）
+    './闻人听書-一笑江湖.mp3',     // 旧文件名（用户可能换回）
+    './一笑江湖-闻人听書.mp3',     // 无空格变体
+    './一笑江湖 - 闻人听书.mp3',   // 「书」简体变体（含空格）
+    './一笑江湖-闻人听书.mp3',     // 「书」简体变体（无空格）
+    './bgm.mp3'                    // 通用兜底命名
+  ];
+
+  // 用本地标记记录“用户意图”，避免音频文件缺失/加载失败时
+  // 按钮文字与 media.paused 实际状态不一致；两个标记彼此独立。
+  let mutedByUser = false;        // 用户是否主动静音
+  let musicPausedByUser = false;  // 用户是否主动暂停音乐
+  let bgmWantsPlay = false;       // 用户是否已请求播放且当前未主动暂停
+  let bgmCandidateIndex = 0;      // 当前正在尝试的候选下标（0 = HTML 中的主候选）
+  let bgmReady = false;           // 是否已找到可播放的候选
+
+  /** 安全播放：自动播放被拦截或音频文件缺失时静默失败，绝不影响游戏。 */
+  function safePlayBgm() {
+    if (!bgm) return;
+    const p = bgm.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  }
+
+  /** 切换到指定候选并触发加载；失败由 error 监听静默切到下一个。 */
+  function applyBgmCandidate(index) {
+    if (!bgm) return;
+    if (index < 0 || index >= BGM_CANDIDATES.length) return;
+    bgmCandidateIndex = index;
+    bgmReady = false;
+    try {
+      bgm.src = BGM_CANDIDATES[index];
+      bgm.load();   // 主动触发加载，保证失败一定会派发 error 事件
+    } catch (e) {
+      // 赋值/加载异常同样视作该候选失败，继续尝试下一个（有界递归）
+      const next = index + 1;
+      if (next < BGM_CANDIDATES.length) applyBgmCandidate(next);
+    }
+  }
+
+  if (bgm) {
+    // 加载失败：静默吞掉并尝试下一个候选；全部失败也不抛错、不中断游戏
+    bgm.addEventListener('error', () => {
+      const next = bgmCandidateIndex + 1;
+      if (next < BGM_CANDIDATES.length) applyBgmCandidate(next);
+      // 已到末尾：保持静默，游戏继续（仅无背景音乐）
+    });
+
+    // 候选可用：若用户已请求播放且未暂停，补一次 play（覆盖加载慢/失败链场景）
+    bgm.addEventListener('canplay', () => {
+      bgmReady = true;
+      if (bgmWantsPlay) safePlayBgm();
+    });
+
+    // 主候选已由 HTML src 指定；此处强制重新加载一次，确保监听器已就绪
+    try { bgm.load(); } catch (e) {}
+  }
+
+  /** 依据用户意图同步两个按钮的文字与无障碍状态。 */
+  function syncMusicButtons() {
+    if (muteBtn) {
+      muteBtn.textContent = mutedByUser ? '🔇 已静音' : '🔊 音乐开';
+      muteBtn.setAttribute('aria-pressed', mutedByUser ? 'true' : 'false');
+    }
+    if (pauseBtn) {
+      pauseBtn.textContent = musicPausedByUser ? '▶ 播放音乐' : '⏸ 暂停音乐';
+      pauseBtn.setAttribute('aria-pressed', musicPausedByUser ? 'true' : 'false');
+    }
+  }
+
+  /** 游戏开始时从头播放；若用户此前主动暂停，则尊重其意图不强制恢复。 */
+  function playBgmFromStart() {
+    if (!bgm) return;
+    try { bgm.currentTime = 0; } catch (e) {}   // 空文件/未加载时设置进度可能抛错，忽略
+    if (!musicPausedByUser) {
+      bgmWantsPlay = true;   // 记录播放意图，供回退链加载成功后补播
+      safePlayBgm();
+    }
+  }
+
+  /** 切换静音，不影响播放/暂停意图。 */
+  function toggleMute() {
+    mutedByUser = !mutedByUser;
+    if (bgm) bgm.muted = mutedByUser;
+    syncMusicButtons();
+  }
+
+  /** 切换播放/暂停，不影响静音意图。 */
+  function togglePause() {
+    musicPausedByUser = !musicPausedByUser;
+    if (bgm) {
+      if (musicPausedByUser) {
+        bgmWantsPlay = false;   // 暂停后不再让回退链自动补播
+        bgm.pause();
+      } else {
+        bgmWantsPlay = true;
+        safePlayBgm();
+      }
+    }
+    syncMusicButtons();
+  }
+
+  /* ======================= 重置 / 开始 ======================= */
+  function resetState() {
+    snake = [{ x: 12, y: 12 }, { x: 11, y: 12 }, { x: 10, y: 12 }];
+    dir = { x: 1, y: 0 };
+    dirQueue = [];
+    score = 0;
+    acc = 0;
+    lastTs = 0;
+    food = spawnFood();
+    updateHud();
+  }
+
+  function startGame() {
+    resetState();
+    running = true;
+    hideOverlay();
+    playBgmFromStart();   // 从头播放；若用户主动暂停过则尊重其意图（内部已判空并捕获异常）
+  }
+
+  function endGame(reason) {
+    running = false;
+    if (score > best) { best = score; saveBest(); }
+    updateHud();
+    showOverlay('游戏结束', reason + ' · 本局得分 ' + score, '再来一局');
+  }
+
+  function showOverlay(title, text, btnLabel) {
+    ovTitle.textContent = title;
+    ovText.textContent = text;
+    ovBtn.textContent = btnLabel;
+    overlay.classList.remove('hidden');
+  }
+  function hideOverlay() {
+    overlay.classList.add('hidden');
+  }
+
+  /* ======================= 方向输入 ======================= */
+  function queueDir(nd) {
+    const last = dirQueue.length ? dirQueue[dirQueue.length - 1] : dir;
+    // 禁止 180° 掉头
+    if (nd.x === -last.x && nd.y === -last.y) return;
+    // 与当前方向相同则不重复入队
+    if (nd.x === last.x && nd.y === last.y) return;
+    if (dirQueue.length < 2) dirQueue.push(nd);
+  }
+
+  const KEY_MAP = {
+    arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0],
+    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0]
+  };
+
+  window.addEventListener('keydown', e => {
+    const v = KEY_MAP[e.key.toLowerCase()];
+    if (!v) return;
+    e.preventDefault();          // 阻止方向键滚动页面
+    if (!running) return;
+    queueDir({ x: v[0], y: v[1] });
+  }, { passive: false });
+
+  /* ======================= 单步逻辑 ======================= */
+  function step() {
+    if (dirQueue.length) dir = dirQueue.shift();
+
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    // 1. 撞墙
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+      return endGame('撞到墙壁了');
+    }
+
+    // 2. 撞自己（尾巴即将移开的格子不算）
+    const eating = food && head.x === food.x && head.y === food.y;
+    const body = eating ? snake : snake.slice(0, -1);
+    if (body.some(s => s.x === head.x && s.y === head.y)) {
+      return endGame('咬到自己了');
+    }
+
+    // 3. 前进
+    snake.unshift(head);
+
+    if (eating) {
+      score += 10;
+      updateHud();
+      food = spawnFood();
+      if (!food) {                       // 填满棋盘 = 通关
+        running = false;
+        if (score > best) { best = score; saveBest(); }
+        updateHud();
+        showOverlay('太强了！', '你填满了整个棋盘 · 得分 ' + score, '再来一局');
+      }
+    } else {
+      snake.pop();
+    }
+  }
+
+  /* ======================= 绘制 ======================= */
+  function draw(ts) {
+    // 底色
+    // const bg = ctx.createLinearGradient(0, 0, W, H);
+    // bg.addColorStop(0, '#0d1729');
+    // bg.addColorStop(1, '#080e1b');
+    // ctx.fillStyle = bg;
+    // ctx.fillRect(0, 0, W, H);
+
+    // 网格
+    ctx.strokeStyle = 'rgba(148, 163, 184, .06)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 1; i < COLS; i++) {
+      ctx.moveTo(i * CELL + .5, 0);
+      ctx.lineTo(i * CELL + .5, H);
+    }
+    for (let j = 1; j < ROWS; j++) {
+      ctx.moveTo(0, j * CELL + .5);
+      ctx.lineTo(W, j * CELL + .5);
+    }
+    ctx.stroke();
+
+    // 食物（带呼吸光晕）
+    if (food) {
+      const cx = food.x * CELL + CELL / 2;
+      const cy = food.y * CELL + CELL / 2;
+      const pulse = 1 + Math.sin(ts / 200) * 0.09;
+      const r = (CELL / 2 - 3.5) * pulse;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(244, 63, 94, .9)';
+      ctx.shadowBlur = 14;
+      const fg = ctx.createRadialGradient(
+        cx - r * .35, cy - r * .35, r * .15, cx, cy, r
+      );
+      fg.addColorStop(0, '#fecdd3');
+      fg.addColorStop(.55, '#fb7185');
+      fg.addColorStop(1, '#e11d48');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!snake.length) return;
+
+    // 蛇身：从尾到头绘制，头在最后（最上层）
+    const n = snake.length;
+    for (let i = n - 1; i >= 0; i--) {
+      const s = snake[i];
+      const t = n > 1 ? i / (n - 1) : 0;
+
+      const pad = 1.6;
+      const x = s.x * CELL + pad;
+      const y = s.y * CELL + pad;
+      const size = CELL - pad * 2;
+
+      const hue   = 158 + t * 30;   // 青绿 → 青蓝
+      const sat   = 84 - t * 8;
+      const light = 60 - t * 16;
+
+      ctx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+
+      if (i === 0) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(52, 211, 153, .8)';
+        ctx.shadowBlur = 12;
+        roundRect(x, y, size, size, 6);
+        ctx.fill();
+        ctx.restore();
+      } else {
+        roundRect(x, y, size, size, 5);
+        ctx.fill();
+      }
+    }
+
+    // 蛇眼睛
+    const hx = snake[0].x * CELL + CELL / 2;
+    const hy = snake[0].y * CELL + CELL / 2;
+    const dx = dir.x, dy = dir.y;
+    const px = -dy, py = dx;   // 垂直方向
+
+    /* ctx.fillStyle = '#052e2b'; */
+    ctx.fillStyle = '#b9d6c4';
+    for (const sign of [1, -1]) {
+      const ex = hx + dx * 3.5 + px * 4 * sign;
+      const ey = hy + dy * 3.5 + py * 4 * sign;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* ======================= 主循环 ======================= */
+  function loop(ts) {
+    if (!lastTs) lastTs = ts;
+    let dt = ts - lastTs;
+    lastTs = ts;
+    if (dt > 250) dt = 250;        // 切后台回来时不要瞬移
+
+    if (running) {
+      acc += dt;
+      let guard = 0;
+      while (running && acc >= stepMs() && guard++ < 5) {
+        acc -= stepMs();
+        step();
+      }
+    }
+
+    draw(ts);
+    requestAnimationFrame(loop);
+  }
+
+  /* ======================= 事件绑定 ======================= */
+  ovBtn.addEventListener('click', startGame);
+  restartBtn.addEventListener('click', startGame);
+  if (muteBtn)  muteBtn.addEventListener('click', toggleMute);
+  if (pauseBtn) pauseBtn.addEventListener('click', togglePause);
+
+  /* ============ 自动化验证辅助（只读为主，不影响游戏逻辑） ============ */
+  // 供 QA 在无真实音频文件的测试环境验证回退链路：
+  //   __snakeBgmDebug.candidates / .index / .currentSrc / .wantsPlay / .ready
+  //   __snakeBgmDebug.simulateError()  手动触发一次“加载失败”
+  //   __snakeBgmDebug.reset()          从第 0 个候选重新开始
+  window.__snakeBgmDebug = {
+    get candidates() { return BGM_CANDIDATES.slice(); },
+    get index() { return bgmCandidateIndex; },
+    get currentSrc() { return bgm ? bgm.getAttribute('src') : ''; },
+    get wantsPlay() { return bgmWantsPlay; },
+    get ready() { return bgmReady; },
+    simulateError() {
+      if (bgm) bgm.dispatchEvent(new Event('error'));
+    },
+    reset() {
+      bgmWantsPlay = false;
+      applyBgmCandidate(0);
+    }
+  };
+
+  /* ======================= 启动 ======================= */
+  loadBest();
+  resetState();                     // 先摆好初始画面作为预览
+  syncMusicButtons();               // 初始化音乐按钮文字与 aria-pressed 状态
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
