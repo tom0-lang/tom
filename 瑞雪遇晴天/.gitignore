@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# 原始 AI 生成图（含水印的中间产物，不入库；提示词见 docs/prompts.md 可再生成）
+src-raw/
+assets-src/
+
+# 抠图质检中间产物
+check-*.png
+
+# 系统杂项
+Thumbs.db
+.DS_Store
